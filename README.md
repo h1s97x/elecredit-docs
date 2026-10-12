@@ -71,9 +71,29 @@ GitHub Pages
 ### 前置条件（首次发布）
 
 1. GitHub 侧已创建文档仓（`.cnb.yml` 里 `target_url` 指向它）。
-2. `h1s97x/secret-env` 提供 `GITHUB_USERNAME` / `GITHUB_TOKEN`（`GITHUB_TOKEN` 需 repo 范围）。
-3. GitHub 仓的 Pages Source 选 **GitHub Actions**
-   （workflow 里 `configure-pages` 的 `enablement: true` 首次会自动开启）。
+2. `h1s97x/secret-env` 提供 `GITHUB_USERNAME` / `GITHUB_TOKEN`
+   （classic PAT，需 `repo` 范围；既要能推代码，也要能建 Pages）。
+3. **GitHub 仓已启用 Pages（Build and deployment → Source = GitHub Actions）**。
+
+**第 3 条无法自动完成，必须靠引导 job（或手工在 GitHub 设置里开）**。
+`actions/configure-pages` 的 `enablement: true` **不会**替全新仓库开 Pages：
+创建 Pages 站点的 API 需要仓库 **admin** 权限，而 workflow 内置的 `GITHUB_TOKEN`
+拿不到 `administration` 作用域（该作用域不在 Actions 可授权列表内）。
+表现出来就是 build job 一路绿到 `configure-pages` 才红，站点始终 404。
+
+正确做法：在 CNB 侧手动触发一次引导 job（幂等，已启用则只重新派发 workflow）：
+
+```bash
+cnb build start-build --repo h1s97x/whccb/elecredit-docs \
+  --branch main \
+  --event api_trigger_ensure_github_pages
+```
+
+它用 `secret-env` 里具备 admin 权限的 `GITHUB_TOKEN` 建 Pages，并顺带重新派发一次
+站点 workflow。也可在 CNB UI 点 `ensure-github-pages` 按钮。
+
+为什么不把这份 token 加到 GitHub secret 让 workflow 自己开：那是把同一份凭据
+复制成第二份，重复且扩大暴露面（与源码仓既有治理约定一致）。
 
 ### 发布细节
 
