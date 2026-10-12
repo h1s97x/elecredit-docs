@@ -1,0 +1,17 @@
+{
+  "name": "elecredit-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.0.0",
+  "description": "Elecredit（元素数智企业风控）文档站（VitePress，独立于代码仓库）",
+  "scripts": {
+    "dev": "vitepress dev --port 5173",
+    "build": "vitepress build",
+    "preview": "vitepress preview --port 4173",
+    "check:endpoints": "node scripts/check-endpoints.mjs"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}

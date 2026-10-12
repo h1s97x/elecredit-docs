@@ -1,0 +1,41 @@
+# =============================================================================
+# Elecredit 文档站（CNB 内容源）的流水线配置
+#
+# 内容源与发布源分离是本方案的核心：
+#
+#   CNB 文档仓（本文件所在仓，内容源，唯一编辑入口）
+#        │  main push 即单向同步
+#        ▼
+#   GitHub 文档仓（发布源）
+#        │  .github/workflows/docs.yml：端点覆盖校验 → 构建 → 发布 Pages
+#        ▼
+#   GitHub Pages
+#
+# 为什么不在 CNB 侧构建发布：
+#   站点发布在 GitHub Pages，让 GitHub Actions 基于「被发布的那份内容」构建，
+#   避免 CNB 构建产物与 GitHub 上的内容版本漂移。
+#   因此本仓 CI 只负责把内容同步过去，发布与校验都在 GitHub 侧做。
+#
+# 凭据：GITHUB_USERNAME / GITHUB_TOKEN 来自密钥仓库 h1s97x/secret-env
+#   （与 elecredit-api 源码仓共用同一份密钥仓库，不新增 secret）。
+# =============================================================================
+
+.git-sync-settings: &git-sync-settings
+  # 发布源仓库（GitHub 上的文档仓，需已开启 Pages 且 Source 选 GitHub Actions）
+  target_url: https://github.com/h1s97x/elecredit-docs.git
+  auth_type: https
+  username: ${GITHUB_USERNAME}
+  password: ${GITHUB_TOKEN}
+  branch: main
+
+main:
+  push:
+    - imports:
+        - https://cnb.cool/h1s97x/secret-env/-/blob/main/env.yml
+      name: sync to github
+      stages:
+        - name: sync to github
+          image: tencentcom/git-sync
+          settings:
+            <<: *git-sync-settings
+            sync_mode: push
