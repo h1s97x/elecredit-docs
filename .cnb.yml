@@ -74,11 +74,13 @@ main:
 # -----------------------------------------------------------------------------
 # $ 兜底分支：仓库级事件（平台约束，同源码仓）。
 # 引导 job 同时挂 api_trigger 与 web_trigger，两条触发路径都能用：
-#   - api_trigger.ensure_github_pages：供 CLI/API 触发（不用进 UI）
+#   - api_trigger_ensure_github_pages：供 CLI/API 触发（不用进 UI）
+#     注意：api_trigger 的事件键用**下划线**（实测 dot 形式报 CONFIG_EVENT_EMPTY），
+#     与 web_trigger 的 dot 形式不同。
 #   - web_trigger.ensure_github_pages：供 CNB UI 按钮触发
 # -----------------------------------------------------------------------------
 $:
-  api_trigger.ensure_github_pages:
+  api_trigger_ensure_github_pages:
     - <<: *bootstrap-github-pages
   web_trigger.ensure_github_pages:
     - <<: *bootstrap-github-pages
