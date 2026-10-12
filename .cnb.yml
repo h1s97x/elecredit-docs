@@ -21,12 +21,43 @@
 # =============================================================================
 
 .git-sync-settings: &git-sync-settings
-  # 发布源仓库（GitHub 上的文档仓，需已开启 Pages 且 Source 选 GitHub Actions）
+  # 发布源仓库（GitHub 上的文档仓）
   target_url: https://github.com/h1s97x/elecredit-docs.git
   auth_type: https
   username: ${GITHUB_USERNAME}
   password: ${GITHUB_TOKEN}
   branch: main
+
+# -----------------------------------------------------------------------------
+# 一次性引导锚点：确保 GitHub 发布仓已启用 Pages，并（重新）触发站点 workflow。
+#
+# 为什么需要它（2026-10-12 实测）：
+#   .github/workflows/docs.yml 里 actions/configure-pages 带了 enablement: true，
+#   但「创建 Pages 站点」这个 API 需要仓库 **admin** 权限，而 workflow 内置的
+#   GITHUB_TOKEN 拿不到 administration 作用域（该作用域不在 Actions 可授权列表内）。
+#   结果：**全新仓库**首次必然失败在 configure-pages（站点始终 404）。
+#   实证：elecredit-docs 的 has_pages=false 时该步骤失败；onefolio-docs
+#   的 has_pages=true（曾手工开过）时同款配置正常。
+#
+# 为什么用 repo 级 token 而不是 GitHub secret：
+#   本仓 GITHUB_TOKEN（secret-env 的 classic PAT）本身具备仓库 admin 权限，
+#   直接放 CNB 侧用，避免把同一份凭据再复制一份到 GitHub secret
+#   ——复制既重复，又扩大暴露面（与源码仓既有治理约定一致）。
+#
+# 幂等：已启用则跳过创建，只会重新触发一次站点 workflow。平时不跑，仅手动触发。
+# -----------------------------------------------------------------------------
+.bootstrap-github-pages: &bootstrap-github-pages
+  name: bootstrap-github-pages (manual)
+  imports:
+    - https://cnb.cool/h1s97x/secret-env/-/blob/main/env.yml
+  env:
+    GH_REPO: h1s97x/elecredit-docs
+  stages:
+    - name: ensure pages enabled + dispatch docs workflow
+      image: node:24
+      # ⚠️ 平台会把 script 的换行折叠，故本脚本写成**单行分号**形式（同源码仓约定）。
+      script: |
+        node --input-type=module -e "const repo=process.env.GH_REPO;const auth='Basic '+Buffer.from(process.env.GITHUB_USERNAME+':'+process.env.GITHUB_TOKEN).toString('base64');const h={Authorization:auth,'User-Agent':'cnb-docs-pipeline','X-GitHub-Api-Version':'2022-11-28'};const api='https://api.github.com/repos/'+repo;const jh=Object.assign({'Content-Type':'application/json'},h);const g=await fetch(api+'/pages',{headers:h});console.log('GET  /pages ->',g.status);if(g.status!==404&&!g.ok){console.log('无法判断 Pages 状态，请检查 GITHUB_TOKEN 权限');process.exit(1)}if(g.ok){console.log('Pages 已启用，跳过创建')}else{const c=await fetch(api+'/pages',{method:'POST',headers:jh,body:JSON.stringify({build_type:'workflow'})});console.log('POST /pages ->',c.status);if(!c.ok){console.log(await c.text());process.exit(1)}console.log('已启用 GitHub Pages（build_type=workflow）')}const d=await fetch(api+'/actions/workflows/docs.yml/dispatches',{method:'POST',headers:jh,body:JSON.stringify({ref:'main'})});console.log('POST dispatch docs.yml ->',d.status);if(!d.ok){console.log('未能触发站点 workflow，请手动重跑或再推一个提交')}"
 
 main:
   push:
@@ -39,3 +70,15 @@ main:
           settings:
             <<: *git-sync-settings
             sync_mode: push
+
+# -----------------------------------------------------------------------------
+# $ 兜底分支：仓库级事件（平台约束，同源码仓）。
+# 引导 job 同时挂 api_trigger 与 web_trigger，两条触发路径都能用：
+#   - api_trigger.ensure_github_pages：供 CLI/API 触发（不用进 UI）
+#   - web_trigger.ensure_github_pages：供 CNB UI 按钮触发
+# -----------------------------------------------------------------------------
+$:
+  api_trigger.ensure_github_pages:
+    - <<: *bootstrap-github-pages
+  web_trigger.ensure_github_pages:
+    - <<: *bootstrap-github-pages
